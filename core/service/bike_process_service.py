@@ -3,14 +3,20 @@ import platform
 import sys
 
 import cv2
-from tqdm import tqdm
+import numpy as np
 from flask_socketio import emit
+
 from core.config.app_config import logger
+from core.lib import HKIPcamera
 
 
 class BikeService(object):
     def __init__(self):
         self._is_canceled = False
+        ip = str('10.90.90.91')  # 摄像头IP地址，要和本机IP在同一局域网
+        name = str('admin')  # 管理员用户名
+        pw = str('shihang123')  # 管理员密码
+        HKIPcamera.init(ip, name, pw)
 
     def process_video(self):
         try:
@@ -45,24 +51,17 @@ class BikeService(object):
             opWrapper.configure(params)
             opWrapper.start()
 
-            cap = cv2.VideoCapture("out.mp4")
-            frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-
-            for i in tqdm(range(int(frame_count))):
+            while True:
                 if self._is_canceled:
                     break
-                ret, frame = cap.read()
-                frame_count += 1
-                if not ret:
-                    logger.error("frame %s read error", str(i))
-                    cap.release()
-                    break
+                frame = HKIPcamera.getframe()
+                process_frame = cv2.pyrDown(np.array(frame))
                 datum = op.Datum()
-                datum.cvInputData = frame
+                datum.cvInputData = process_frame
                 opWrapper.emplaceAndPop([datum])
-
-                key_points = datum.poseKeypoints[0]
-                emit('test', key_points.tolist())
+                if datum.poseKeypoints.shape:
+                    key_points = datum.poseKeypoints[0]
+                    emit('test', key_points.tolist())
         except Exception as e:
             logger(e)
 
