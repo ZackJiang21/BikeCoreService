@@ -1,32 +1,30 @@
 from core.util.constant import *
 from core.util.util import *
 from core.config.app_config import logger
-
+import time
 
 class AngleCalculator:
 
     def __init__(self):
+        t1 = time.time()
         self.angle_mode = ['2d', '3d'][0]
 
         self.idx = 1
-        self.angles_tmp = {}
-        self.__initial_report_angles_with_none()
-        self.__initial_report_distance_with_none()
 
-        self.__report_angle_helper = {'left_foot_edge_value': [None] * 4, 'right_foot_edge_value': [None] * 4}
-        # left_foot_bottom_value, left_foot_forward_value, left_foot_rear_value
-        # right_foot_bottom_value, right_foot_forward_value, right_foot_rear_value
+        self.__initial_report_angles_with_none()
+        self.__initial_report_angles_helper()
+
+        self.__initial_report_distance_with_none()
+        self.__initial_report_distance_helper()
 
         self.key_points_front = []
         self.key_points_left = []
         self.key_points_right = []
+        print("*" * 50)
+        print("Calculator initial time: {}".format(time.time() - t1))
+        print("*" * 50)
 
-        self.__report_distance_helper = {}
-
-        for key, value in distance_idx.items():
-            if len(value) == 3:
-                self.__report_distance_helper['{}_Min'.format(key)] = None
-                self.__report_distance_helper['{}_Max'.format(key)] = None
+        self.zero_time = t1
 
     def __initial_report_distance_with_none(self):
         self.report_distance = {}
@@ -35,56 +33,30 @@ class AngleCalculator:
             self.report_distance.update({name: None})
 
     def __initial_report_angles_with_none(self):
-        self.report_angles = {}
+        self.report_angles = report_angle_dict
 
-        for name in report_angle_names:
-            self.report_angles.update({name: None})
+        for key, value in report_angle_dict.items():
+            self.report_angles[key].update({"left": None,
+                                            "right": None,
+                                            "left_more_than_range": 0,
+                                            "left_less_than_range": 0,
+                                            "right_more_than_range": 0,
+                                            "right_less_than_range": 0,
+                                            "left_exceed_range": False,
+                                            "right_exceed_range": False})
 
-    def __update_angle_tmp(self):
-        key_points_front = self.key_points_front
-        key_points_right = self.key_points_right
-        key_points_left = self.key_points_left
+    def __initial_report_angles_helper(self):
+        self.report_angles_helper = {}
+        for key, item in report_angle_dict.items():
+            if key.split("_")[-1] in ["Max", "Min","Top", "Bottom", "Forward", "Rear"]:
+                self.report_angles_helper.update({key: [None, None]}) #left_value, right_value
 
-        self.angles_tmp = {}
-
-        for key, value in angles_tmp_idx.items():
-            if key.endswith("left"):
-                key_points_side = key_points_left
-            elif key.endswith("right"):
-                key_points_side = key_points_right
-            else:
-                key_points_side = None
-                print("error, unknown angle name")
-
+    def __initial_report_distance_helper(self):
+        self.__report_distance_helper = {}
+        for key, value in distance_idx.items():
             if len(value) == 3:
-                if self.angle_mode == '3d':
-                    start_point_side_plane, joint_point_side_plane, end_point_side_plane = \
-                        [key_points_side[idx][:2] for idx in value]
-
-                    start_point_front_plane, joint_point_front_plane, end_point_front_plane = \
-                        [key_points_front[idx][:2] for idx in value]
-
-                    angle = angle_3d(start_point_front_plane, joint_point_front_plane, end_point_front_plane,
-                                     start_point_side_plane, joint_point_side_plane, end_point_side_plane)
-                elif self.angle_mode == '2d':
-                    start_point_side_plane, joint_point_side_plane, end_point_side_plane = \
-                        [key_points_side[idx][:2] for idx in value]
-                    angle = angle_2d(start_point_side_plane, joint_point_side_plane, end_point_side_plane)
-                else:
-                    logger.error('unknown angle mode')
-                    angle = None
-
-            elif len(value) == 2:
-
-                start_point, end_point = [key_points_side[idx][:2] for idx in value]
-
-                angle = horizen_angle(start_point, end_point)
-
-            else:
-                angle = None
-                logger.error("error, unknown angle len")
-
-            self.angles_tmp.update({key: angle})
+                self.__report_distance_helper['{}_Min'.format(key)] = None
+                self.__report_distance_helper['{}_Max'.format(key)] = None
 
     def __update_report_distance(self):
 
@@ -139,152 +111,151 @@ class AngleCalculator:
 
             self.report_distance.update({key: distance})
 
-    def __update_report_angles_with_none(self, key_points_left, key_points_right,
-                                         angles_tmp, report_angles, index):
-        # left angles
-        report_angles["Ankle_Angle_Min_left"] = min_with_none(report_angles["Ankle_Angle_Min_left"],
-                                                              angles_tmp["ankle_angle_left"])
-        report_angles["Ankle_Angle_Max_left"] = max_with_none(report_angles["Ankle_Angle_Max_left"],
-                                                              angles_tmp["ankle_angle_left"])
-        report_angles["Ankle_Angle_Range_left"] = minus_with_none(report_angles["Ankle_Angle_Max_left"],
-                                                                  report_angles["Ankle_Angle_Min_left"])
+    def __update_report_angles(self):
 
-        if topper_than_with_none(key_points_left[19][1], self.__report_angle_helper['left_foot_edge_value'][0]):
-            self.__report_angle_helper['left_foot_edge_value'][0] = key_points_left[19][1]
-            report_angles["Ankle_Angle_Top_left"] = angles_tmp["ankle_angle_left"]
+        for key, item in report_angle_dict.items():
+            idxs_left, idxs_right = item["points"]
+            points_left = [self.key_points_left[idx][:2] for idx in idxs_left]
+            points_right = [self.key_points_right[idx][:2] for idx in idxs_right]
+            if key == "Back_From_Level" and (None,None) not in points_right:
+                a = 1
 
-        if bottomer_than_with_none(key_points_left[19][1], self.__report_angle_helper['left_foot_edge_value'][1]):
-            self.__report_angle_helper['left_foot_edge_value'][1] = key_points_left[19][1]
-            report_angles["Ankle_Angle_Bottom_left"] = angles_tmp["ankle_angle_left"]
+            if len(points_left) == 2:
+                tmp_angle_left = horizen_angle(*points_left)
+                tmp_angle_right = horizen_angle(*points_right)
 
-        if forwarder_than_with_none(key_points_left[19][0], self.__report_angle_helper['left_foot_edge_value'][2]):
-            self.__report_angle_helper['left_foot_edge_value'][2] = key_points_left[19][0]
-            report_angles["Ankle_Angle_Forward_left"] = angles_tmp["ankle_angle_left"]
+            elif len(points_left) == 3:
+                if self.angle_mode == '3d':
+                    points_front = [self.key_points_front[idx][:2] for idx in idxs_left]
+                    tmp_angle_left = angle_3d(*points_front, *points_left)
+                    tmp_angle_right = angle_3d(*points_front, *points_right)
 
-        if rearer_than_with_none(key_points_left[19][0], self.__report_angle_helper['left_foot_edge_value'][3]):
-            self.__report_angle_helper['left_foot_edge_value'][3] = key_points_left[19][0]
-            report_angles["Ankle_Angle_Rear_left"] = angles_tmp["ankle_angle_left"]
+                elif self.angle_mode == '2d':
+                    tmp_angle_left = angle_2d(*points_left)
+                    tmp_angle_right = angle_2d(*points_right)
+                else:
+                    logger.error('unknown angle mode')
+                    tmp_angle_left = None
+                    tmp_angle_right = None
 
-        report_angles["Knee_Angle_Flexion_left"] = max_with_none(report_angles["Knee_Angle_Flexion_left"],
-                                                                 angles_tmp["knee_angle_left"])
-        report_angles["Knee_Angle_Extension_left"] = min_with_none(report_angles["Knee_Angle_Extension_left"],
-                                                                   angles_tmp["knee_angle_left"])
-        report_angles["Knee_Angle_Range_left"] = minus_with_none(report_angles["Knee_Angle_Flexion_left"],
-                                                                 report_angles["Knee_Angle_Extension_left"])
+            else:
+                tmp_angle_left = None
+                tmp_angle_right = None
+                logger.error("error, unknown angle len")
 
-        report_angles["Hip_Angle_Open_left"] = max_with_none(report_angles["Hip_Angle_Open_left"],
-                                                             angles_tmp["hip_angle_left"])
-        report_angles["Hip_Angle_Closed_left"] = min_with_none(report_angles["Hip_Angle_Closed_left"],
-                                                               angles_tmp["hip_angle_left"])
-        report_angles["Hip_Angle_Range_left"] = minus_with_none(report_angles["Hip_Angle_Open_left"],
-                                                                report_angles["Hip_Angle_Closed_left"])
+            mode = key.split("_")[-1]
+            basename = "_".join(key.split("_")[:-1])
 
-        report_angles["Back_From_Level_left"] = angles_tmp["back_from_level_left"]
+            if mode in ["Max", "Flexion", "Open"]:
+                self.report_angles[key]["left"] = max_with_none(self.report_angles[key]["left"], tmp_angle_left)
+                self.report_angles[key]["right"] = max_with_none(self.report_angles[key]["right"], tmp_angle_right)
 
-        report_angles["Back_From_Level_Average_left"] = calculate_average(report_angles["Back_From_Level_Average_left"],
-                                                                          angles_tmp["back_from_level_left"], index)
+            elif mode in ["Min", "Extension", "Closed"]:
+                self.report_angles[key]["left"] = min_with_none(self.report_angles[key]["left"], tmp_angle_left)
+                self.report_angles[key]["right"] = min_with_none(self.report_angles[key]["right"], tmp_angle_right)
 
-        report_angles["Forearm_From_Level_left"] = angles_tmp["forearm_from_level_left"]
-        report_angles["Forearm_From_Level_Average_left"] = calculate_average(
-            report_angles["Forearm_From_Level_Average_left"], angles_tmp["forearm_from_level_left"], index)
+            elif mode == "Range":
+                max_key = "{}_Max".format(basename)
+                min_key = "{}_Min".format(basename)
+                self.report_angles[key]["left"] = minus_with_none(self.report_angles[max_key]["left"], self.report_angles[min_key]["left"])
+                self.report_angles[key]["right"] = minus_with_none(self.report_angles[max_key]["right"], self.report_angles[min_key]["right"])
 
-        report_angles["Foot_From_Level_left"] = angles_tmp["foot_from_level_left"]
-        report_angles["Foot_From_Level_Average_left"] = calculate_average(report_angles["Foot_From_Level_Average_left"],
-                                                                          angles_tmp["foot_from_level_left"], index)
+            elif mode == "Top":
+                if topper_than_with_none(self.key_points_left[19][1], self.report_angles_helper[key][0]):
+                    self.report_angles_helper[key][0] = self.key_points_left[19][1]
+                    self.report_angles[key]["left"] = tmp_angle_left
 
-        report_angles["Hip_Shoulder_Wrist_left"] = angles_tmp["hip_shoulder_wrist_angle_left"]
-        report_angles["Hip_Shoulder_Wrist_Average_left"] = calculate_average(
-            report_angles["Hip_Shoulder_Wrist_Average_left"], angles_tmp["hip_shoulder_wrist_angle_left"], index)
+                if topper_than_with_none(self.key_points_right[22][1], self.report_angles_helper[key][1]):
+                    self.report_angles_helper[key][1] = self.key_points_right[22][1]
+                    self.report_angles[key]["right"] = tmp_angle_right
 
-        report_angles["Hip_Shoulder_Elbow_left"] = angles_tmp["hip_shoulder_elbow_angle_left"]
-        report_angles["Hip_Shoulder_Elbow_Average_left"] = calculate_average(
-            report_angles["Hip_Shoulder_Elbow_Average_left"], angles_tmp["hip_shoulder_elbow_angle_left"], index)
+            elif mode == "Bottom":
+                if bottomer_than_with_none(self.key_points_left[19][1], self.report_angles_helper[key][0]):
+                    self.report_angles_helper[key][0] = self.key_points_left[19][1]
+                    self.report_angles[key]["left"] = tmp_angle_left
 
-        report_angles["Elbow_Angle_left"] = angles_tmp["elbow_angle_left"]
-        report_angles["Elbow_Angle_Average_left"] = calculate_average(report_angles["Elbow_Angle_Average_left"],
-                                                                      angles_tmp["elbow_angle_left"], index)
+                if bottomer_than_with_none(self.key_points_right[22][1], self.report_angles_helper[key][1]):
+                    self.report_angles_helper[key][1] = self.key_points_right[22][1]
+                    self.report_angles[key]["right"] = tmp_angle_right
 
-        # right angles
+            elif mode == "Forward":
+                if forwarder_than_with_none(self.key_points_left[19][0], self.report_angles_helper[key][0]):
+                    self.report_angles_helper[key][0] = self.key_points_left[19][1]
+                    self.report_angles[key]["left"] = tmp_angle_left
 
-        report_angles["Ankle_Angle_Min_right"] = min_with_none(report_angles["Ankle_Angle_Min_right"],
-                                                               angles_tmp["ankle_angle_right"])
-        report_angles["Ankle_Angle_Max_right"] = max_with_none(report_angles["Ankle_Angle_Max_right"],
-                                                               angles_tmp["ankle_angle_right"])
-        report_angles["Ankle_Angle_Range_right"] = minus_with_none(report_angles["Ankle_Angle_Max_right"],
-                                                                   report_angles["Ankle_Angle_Min_right"])
+                if forwarder_than_with_none_right(self.key_points_right[22][0], self.report_angles_helper[key][1]):
+                    self.report_angles_helper[key][1] = self.key_points_right[22][1]
+                    self.report_angles[key]["right"] = tmp_angle_right
 
-        if topper_than_with_none(key_points_right[22][1], self.__report_angle_helper['right_foot_edge_value'][0]):
-            self.__report_angle_helper['right_foot_edge_value'][0] = key_points_right[22][1]
-            report_angles["Ankle_Angle_Top_right"] = angles_tmp["ankle_angle_right"]
+            elif mode == "Rear":
+                if rearer_than_with_none(self.key_points_left[19][0], self.report_angles_helper[key][0]):
+                    self.report_angles_helper[key][0] = self.key_points_left[19][1]
+                    self.report_angles[key]["left"] = tmp_angle_left
 
-        if bottomer_than_with_none(key_points_right[22][1], self.__report_angle_helper['right_foot_edge_value'][1]):
-            self.__report_angle_helper['right_foot_edge_value'][1] = key_points_right[22][1]
-            report_angles["Ankle_Angle_Bottom_right"] = angles_tmp["ankle_angle_right"]
+                if rearer_than_with_none_right(self.key_points_right[22][0], self.report_angles_helper[key][1]):
+                    self.report_angles_helper[key][1] = self.key_points_right[22][1]
+                    self.report_angles[key]["right"] = tmp_angle_right
 
-        if forwarder_than_with_none_right(key_points_right[22][0],
-                                          self.__report_angle_helper['right_foot_edge_value'][2]):
-            self.__report_angle_helper['right_foot_edge_value'][2] = key_points_right[22][0]
-            report_angles["Ankle_Angle_Forward_right"] = angles_tmp["ankle_angle_right"]
+            elif mode == "Average":
+                self.report_angles[key]["left"] = calculate_average(self.report_angles[key]["left"], tmp_angle_left, self.idx)
+                self.report_angles[key]["right"] = calculate_average(self.report_angles[key]["right"], tmp_angle_right, self.idx)
 
-        if rearer_than_with_none_right(key_points_right[22][0], self.__report_angle_helper['right_foot_edge_value'][3]):
-            self.__report_angle_helper['right_foot_edge_value'][3] = key_points_right[22][0]
-            report_angles["Ankle_Angle_Rear_right"] = angles_tmp["ankle_angle_right"]
+            else:
+                self.report_angles[key]["left"] = tmp_angle_left
+                self.report_angles[key]["right"] = tmp_angle_right
 
-        report_angles["Knee_Angle_Flexion_right"] = max_with_none(report_angles["Knee_Angle_Flexion_right"],
-                                                                  angles_tmp["knee_angle_right"])
-        report_angles["Knee_Angle_Extension_right"] = min_with_none(report_angles["Knee_Angle_Extension_right"],
-                                                                    angles_tmp["knee_angle_right"])
-        report_angles["Knee_Angle_Range_right"] = minus_with_none(report_angles["Knee_Angle_Flexion_right"],
-                                                                  report_angles["Knee_Angle_Extension_right"])
+            # post process
+            if self.report_angles[key]["left"] is not None:
+                self.report_angles[key]["left"] = round(self.report_angles[key]["left"], 2)
+            if self.report_angles[key]["right"] is not None:
+                self.report_angles[key]["right"] = round(self.report_angles[key]["right"], 2)
 
-        report_angles["Hip_Angle_Open_right"] = max_with_none(report_angles["Hip_Angle_Open_right"],
-                                                              angles_tmp["hip_angle_right"])
-        report_angles["Hip_Angle_Closed_right"] = min_with_none(report_angles["Hip_Angle_Closed_right"],
-                                                                angles_tmp["hip_angle_right"])
-        report_angles["Hip_Angle_Range_right"] = minus_with_none(report_angles["Hip_Angle_Open_right"],
-                                                                 report_angles["Hip_Angle_Closed_right"])
+    def __report_angles_alarm(self):
+        for key, item in self.report_angles.items():
+            # default we think there is no alarm, and will not update the exceed value
+            item["left_exceed_range"] = False
+            item["right_exceed_range"] = False
 
-        report_angles["Back_From_Level_right"] = angles_tmp["back_from_level_right"]
-        report_angles["Back_From_Level_Average_right"] = calculate_average(
-            report_angles["Back_From_Level_Average_right"], angles_tmp["back_from_level_right"], index)
+            range = item["good_range"]
+            
+            # no range data, no need to alarm
+            if range == (None, None):
+                continue
 
-        report_angles["Forearm_From_Level_right"] = angles_tmp["forearm_from_level_right"]
-        report_angles["Forearm_From_Level_Average_right"] = calculate_average(
-            report_angles["Forearm_From_Level_Average_right"], angles_tmp["forearm_from_level_right"], index)
+            left_angle = item["left"]
+            right_angle = item["right"]
 
-        report_angles["Foot_From_Level_right"] = angles_tmp["foot_from_level_right"]
-        report_angles["Foot_From_Level_Average_right"] = calculate_average(
-            report_angles["Foot_From_Level_Average_right"], angles_tmp["foot_from_level_right"], index)
+            if left_angle is not None:
+                if left_angle - range[1] > item["left_more_than_range"]:
+                    item["left_exceed_range"] = True
+                    item["left_more_than_range"] = left_angle - range[1]
 
-        report_angles["Hip_Shoulder_Wrist_right"] = angles_tmp["hip_shoulder_wrist_angle_right"]
-        report_angles["Hip_Shoulder_Wrist_Average_right"] = calculate_average(
-            report_angles["Hip_Shoulder_Wrist_Average_right"], angles_tmp["hip_shoulder_wrist_angle_right"], index)
+                elif range[0] - left_angle > item["left_less_than_range"]:
+                    item["left_exceed_range"] = True
+                    item["left_more_than_range"] = - (range[0] - left_angle)
 
-        report_angles["Hip_Shoulder_Elbow_right"] = angles_tmp["hip_shoulder_elbow_angle_right"]
-        report_angles["Hip_Shoulder_Elbow_Average_right"] = calculate_average(
-            report_angles["Hip_Shoulder_Elbow_Average_right"], angles_tmp["hip_shoulder_elbow_angle_right"], index)
 
-        report_angles["Elbow_Angle_right"] = angles_tmp["elbow_angle_right"]
-        report_angles["Elbow_Angle_Average_right"] = calculate_average(report_angles["Elbow_Angle_Average_right"],
-                                                                       angles_tmp["elbow_angle_right"], index)
+
+            if right_angle is not None:
+                # more than
+                if right_angle - range[1] > item["right_more_than_range"]:
+                    item["right_exceed_range"] = True
+                    item["right_more_than_range"] = right_angle - range[1]
+                # less than
+                elif range[0] - right_angle > item["right_less_than_range"]:
+                    item["right_exceed_range"] = True
+                    item["right_more_than_range"] = - (range[0] - right_angle)
+
 
     def update_every_frame(self, key_points_front, key_points_right, key_points_left):
+        t1 = time.time()
+
         self.key_points_front = key_points_front
         self.key_points_left = key_points_left
         self.key_points_right = key_points_right
 
-        self.__update_angle_tmp()
-        self.__update_report_angles_with_none(self.key_points_left,
-                                              self.key_points_right,
-                                              self.angles_tmp,
-                                              self.report_angles,
-                                              self.idx)
-
-        # angle float set to 2 wei xiao shu
-        for k, v in self.report_angles.items():
-            if v is None:
-                continue
-            self.report_angles.update({k: round(float(v), 2)})
+        self.__update_report_angles()
+        self.__report_angles_alarm()
 
         self.__update_report_distance()
         for k, v in self.report_distance.items():
@@ -292,4 +263,7 @@ class AngleCalculator:
                 continue
             self.report_distance.update({k: round(float(v), 2)})
 
+        # print("[{}] update time: {}".format(self.idx, time.time() - t1))
+        # print("[{}] update fps: {}, actual fps: {}".format(self.idx, round(1 / (time.time() - t1), 1), round(self.idx/(time.time() - self.zero_time), 1)))
         self.idx += 1
+

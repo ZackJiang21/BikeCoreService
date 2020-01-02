@@ -9,8 +9,9 @@ from core.lib import HKIPcamera1
 from core.lib import HKIPcamera2
 from core.lib import HKIPcamera3
 import numpy as np
+import time
 
-from core.util.angle_calculator_bak import AngleCalculator
+from core.util.angle_calculator import AngleCalculator
 
 from core.config.app_config import logger
 
@@ -31,7 +32,7 @@ try:
         import pyopenpose as op
     else:
         # Change these variables to point to the correct folder (Release/x64 etc.)
-        sys.path.append('../../python');
+        sys.path.append('/home/zhangjiang/code/openpose/openpose/build/python');
         # If you run `make install` (default path is `/usr/local/python` for Ubuntu), you can also access the OpenPose/python module from there. This will install OpenPose and the python library at your desired installation path. Ensure that this is in your python path in order to use it.
         # sys.path.append('/usr/local/python')
         from openpose import pyopenpose as op
@@ -43,7 +44,7 @@ except ImportError as e:
 
 # Custom Params (refer to include/openpose/flags.hpp for more parameters)
 params = dict()
-params["model_folder"] = "../../../models/"
+params["model_folder"] = "/home/zhangjiang/code/openpose/openpose/models/"
 
 # Construct it from system arguments
 # op.init_argv(args[1])
@@ -61,20 +62,28 @@ while True:
     datum = op.Datum()
 
     # frame1 front
+    t0 = time.time()
     frame = HKIPcamera1.getframe()
+    t1 = time.time()
     process_frame1 = cv2.pyrDown(np.rot90(np.array(frame)))
+    t2 = time.time()
+
     datum.cvInputData = process_frame1
+    t3 = time.time()
+
     opWrapper.emplaceAndPop([datum])
+    t4 = time.time()
     if datum.poseKeypoints.shape:
         key_points1 = datum.poseKeypoints[0].tolist()
         key_points1 = [(None, None, None) if point[:2] == [0.0, 0.0] else tuple(point) for point in key_points1]
     else:
         key_points1 = [(None, None, None)] * 25
         logger.warn("can not detect person in camera 1")
+    t5 = time.time()
 
     # frame2 left
     frame2 = HKIPcamera2.getframe()
-    process_frame2 = cv2.pyrDown(np.array(frame2))
+    process_frame2 = cv2.pyrDown(np.rot90(np.array(frame2)))
     datum.cvInputData = process_frame2
     opWrapper.emplaceAndPop([datum])
     if datum.poseKeypoints.shape:
@@ -86,7 +95,7 @@ while True:
 
     # frame3 right
     frame3 = HKIPcamera3.getframe()
-    process_frame3 = cv2.pyrDown(np.array(frame3))
+    process_frame3 = cv2.pyrDown(np.rot90(np.array(frame3)))
     datum.cvInputData = process_frame3
     opWrapper.emplaceAndPop([datum])
     if datum.poseKeypoints.shape:
@@ -96,8 +105,27 @@ while True:
         key_points3 = [(None, None, None)] * 25
         logger.warn("can not detect person in camera 3")
 
+    key_points_all = {}
+    process_frame4 = np.concatenate([process_frame1, process_frame2, process_frame3], axis=1)
+    datum.cvInputData = process_frame4
+    opWrapper.emplaceAndPop([datum])
 
-    # calculate angles
+    width_single_img = process_frame1.shape[1]
+    for idx, poseKeypoints in enumerate(datum.poseKeypoints):
+        key_points = poseKeypoints.tolist()
+
+        x_max = max([point[0] for point in key_points])
+
+        if 0 <= x_max and x_max < width_single_img:
+            key_points_all.update({'{}_1'.format(idx, ): [(None, None, None) if point[:2] == [0.0, 0.0] else tuple(point) for point in key_points]})
+        elif width_single_img <= x_max and x_max < width_single_img * 2:
+            key_points_all.update({'{}_2'.format(idx, ): [(None, None, None) if point[:2] == [0.0, 0.0] else (point[0] - width_single_img, point[1], point[2]) for point in key_points]})
+        else:
+            key_points_all.update({'{}_3'.format(idx, ): [(None, None, None) if point[:2] == [0.0, 0.0] else (point[0] - 2 * width_single_img, point[1], point[2]) for point in key_points]})
+
+# calculate angles
     angle_calculator.update_every_frame(key_points1, key_points3, key_points2)
     a = 1
+
+    print('t2-t1 {}, t3-t2 {}, t4-t3 {}, t5-t4 {}'.format(t2-t1, t3-t2, t4-t3, t5-t4))
 

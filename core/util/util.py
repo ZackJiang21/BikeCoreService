@@ -131,6 +131,11 @@ def mul_with_none(a,b):
         return None
     return a * b
 
+def mod_with_none(a,b):
+    if None in (a, b):
+        return None
+    return a // b
+
 def div_with_none(a,b):
     if None in (a, b):
         return None
