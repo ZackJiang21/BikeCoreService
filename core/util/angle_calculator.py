@@ -2,14 +2,17 @@ from core.util.constant import *
 from core.util.util import *
 from core.config.app_config import logger
 import time
+import cv2
 
 class AngleCalculator:
 
-    def __init__(self):
+    def __init__(self, width, height):
         t1 = time.time()
         self.angle_mode = ['2d', '3d'][0]
 
         self.idx = 1
+
+        self.is_last_frame = False # only last frame we calculate range
 
         self.__initial_report_angles_with_none()
         self.__initial_report_angles_helper()
@@ -20,6 +23,15 @@ class AngleCalculator:
         self.key_points_front = []
         self.key_points_left = []
         self.key_points_right = []
+
+        # marker if not initialized
+        self.knee_path_pic_color = (81, 62, 45) # BGR
+        self.knee_path_pic = None
+        self.left_knee_path_start_point = None
+        self.right_knee_path_start_point = None
+        self.knee_path_pic_crop_ratio = 2 # means final pic should be 1/ratio times of original from center
+        self.frame_shape = (width, height, 3)
+
         print("*" * 50)
         print("Calculator initial time: {}".format(time.time() - t1))
         print("*" * 50)
@@ -38,10 +50,10 @@ class AngleCalculator:
         for key, value in report_angle_dict.items():
             self.report_angles[key].update({"left": None,
                                             "right": None,
-                                            "left_more_than_range": 0,
-                                            "left_less_than_range": 0,
-                                            "right_more_than_range": 0,
-                                            "right_less_than_range": 0,
+                                            "left_more_than_range": None,
+                                            "left_less_than_range": None,
+                                            "right_more_than_range": None,
+                                            "right_less_than_range": None,
                                             "left_exceed_range": False,
                                             "right_exceed_range": False})
 
@@ -133,6 +145,11 @@ class AngleCalculator:
                 elif self.angle_mode == '2d':
                     tmp_angle_left = angle_2d(*points_left)
                     tmp_angle_right = angle_2d(*points_right)
+
+                    # knee angle exception
+                    if key.startswith("Knee_Angle"):
+                        tmp_angle_left = minus_with_none(180, tmp_angle_left)
+                        tmp_angle_right = minus_with_none(180, tmp_angle_right)
                 else:
                     logger.error('unknown angle mode')
                     tmp_angle_left = None
@@ -155,11 +172,14 @@ class AngleCalculator:
                 self.report_angles[key]["right"] = min_with_none(self.report_angles[key]["right"], tmp_angle_right)
 
             elif mode == "Range":
-                max_key = "{}_Max".format(basename)
-                min_key = "{}_Min".format(basename)
-                self.report_angles[key]["left"] = minus_with_none(self.report_angles[max_key]["left"], self.report_angles[min_key]["left"])
-                self.report_angles[key]["right"] = minus_with_none(self.report_angles[max_key]["right"], self.report_angles[min_key]["right"])
-
+                if self.is_last_frame:
+                    max_key = "{}_Max".format(basename)
+                    min_key = "{}_Min".format(basename)
+                    self.report_angles[key]["left"] = minus_with_none(self.report_angles[max_key]["left"], self.report_angles[min_key]["left"])
+                    self.report_angles[key]["right"] = minus_with_none(self.report_angles[max_key]["right"], self.report_angles[min_key]["right"])
+                else:
+                    self.report_angles[key]["left"] = None
+                    self.report_angles[key]["right"] = None
             elif mode == "Top":
                 if topper_than_with_none(self.key_points_left[19][1], self.report_angles_helper[key][0]):
                     self.report_angles_helper[key][0] = self.key_points_left[19][1]
@@ -212,50 +232,71 @@ class AngleCalculator:
 
     def __report_angles_alarm(self):
         for key, item in self.report_angles.items():
-            # default we think there is no alarm, and will not update the exceed value
-            item["left_exceed_range"] = False
-            item["right_exceed_range"] = False
 
             range = item["good_range"]
-            
             # no range data, no need to alarm
             if range == (None, None):
                 continue
 
-            left_angle = item["left"]
-            right_angle = item["right"]
+            for side in ["left", "right"]:
 
-            if left_angle is not None:
-                if left_angle - range[1] > item["left_more_than_range"]:
-                    item["left_exceed_range"] = True
-                    item["left_more_than_range"] = left_angle - range[1]
+                # default we think there is no alarm, and will not update the exceed value
+                item["{}_exceed_range".format(side)] = False
 
-                elif range[0] - left_angle > item["left_less_than_range"]:
-                    item["left_exceed_range"] = True
-                    item["left_more_than_range"] = - (range[0] - left_angle)
+                side_angle = eval("item['{}']".format(side))
 
+                if side_angle is not None:
+                    if side_angle > range[1]:
+                        item["{}_exceed_range".format(side)] = True
+                        if item["{}_more_than_range".format(side)] is None or side_angle - range[1] > item["{}_more_than_range".format(side)]:
+                            item["{}_more_than_range".format(side)] = round(side_angle - range[1], 2)
+                    elif side_angle < range[0]:
+                        item["{}_exceed_range".format(side)] = True
+                        if item["{}_less_than_range".format(side)] is None or range[0] - side_angle >  abs(item["{}_less_than_range".format(side)]):
+                            item["{}_less_than_range".format(side)] = - round((range[0] - side_angle), 2)
 
+    def __update_knee_pic(self, key_points1, frame_shape):
 
-            if right_angle is not None:
-                # more than
-                if right_angle - range[1] > item["right_more_than_range"]:
-                    item["right_exceed_range"] = True
-                    item["right_more_than_range"] = right_angle - range[1]
-                # less than
-                elif range[0] - right_angle > item["right_less_than_range"]:
-                    item["right_exceed_range"] = True
-                    item["right_more_than_range"] = - (range[0] - right_angle)
+        if self.knee_path_pic is None:
+            self.knee_path_pic = np.zeros(frame_shape, np.uint8)
+            for i in range(3):
+                self.knee_path_pic[:,:,i] = self.knee_path_pic_color[i]
 
+            # plot bike frame
+            cv2.line(self.knee_path_pic,
+                     (int(self.frame_shape[1]//2), int(self.frame_shape[0]//8*3)),
+                     (int(self.frame_shape[1]//2), int(self.frame_shape[0]//8*5)),
+                     color=(231, 136, 29),
+                     thickness=3)
 
-    def update_every_frame(self, key_points_front, key_points_right, key_points_left):
+        for side, point_idx in [("left", 13), ("right", 10)]:
+            if None not in key_points1[point_idx]:
+                current_knee_point = (int(key_points1[point_idx][0]), int(key_points1[point_idx][1]))
+
+                if eval("self.{}_knee_path_start_point".format(side)) is not None:
+                    color = (0, 0, 255) if current_knee_point[1] > eval("self.{}_knee_path_start_point[1]".format(side)) else (0, 255, 0)
+
+                    # down is red (0, 0 ,255), up is green (0, 255, 0) BGR
+                    cv2.line(self.knee_path_pic, eval("self.{}_knee_path_start_point".format(side)), current_knee_point, color=color, thickness=2)
+
+                exec("self.{}_knee_path_start_point = current_knee_point".format(side))
+
+        cv2.imwrite("realtime_knee_path.png", self.knee_path_pic)
+
+    def update_every_frame(self, key_points_front, key_points_right, key_points_left, is_last_frame):
+
         t1 = time.time()
 
         self.key_points_front = key_points_front
         self.key_points_left = key_points_left
         self.key_points_right = key_points_right
 
+        self.is_last_frame = is_last_frame
+
         self.__update_report_angles()
         self.__report_angles_alarm()
+
+        self.__update_knee_pic(key_points_front, self.frame_shape)
 
         self.__update_report_distance()
         for k, v in self.report_distance.items():

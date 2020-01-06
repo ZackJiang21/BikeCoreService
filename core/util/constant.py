@@ -92,11 +92,11 @@ report_angle_dict = {
     "Hip_Shoulder_Wrist": {"points": angles_tmp_idx["hip_shoulder_wrist_angle"], "mode": "FLY", "good_range": (None, None), "display_name": "Hip_Shoulder_Wrist"},
     "Hip_Shoulder_Wrist_Average": {"points": angles_tmp_idx["hip_shoulder_wrist_angle"], "mode": "AVERAGE", "good_range": (None, None), "display_name": "Hip_Shoulder_Wrist_Average"},
 
-    "Hip_Shoulder_Elbow": {"points": angles_tmp_idx["hip_shoulder_elbow_angle"], "mode": "FLY", "good_range": (None, None), "display_name": "Hip_Shoulder_Elbow"},
-    "Hip_Shoulder_Elbow_Average": {"points": angles_tmp_idx["hip_shoulder_elbow_angle"], "mode": "AVERAGE", "good_range": (None, None), "display_name": "Hip_Shoulder_Elbow_Average"},
+    "Hip_Shoulder_Elbow": {"points": angles_tmp_idx["hip_shoulder_elbow_angle"], "mode": "FLY", "good_range": (70, 80), "display_name": "Hip_Shoulder_Elbow"},
+    "Hip_Shoulder_Elbow_Average": {"points": angles_tmp_idx["hip_shoulder_elbow_angle"], "mode": "AVERAGE", "good_range": (70, 80), "display_name": "Hip_Shoulder_Elbow_Average"},
 
-    "Elbow_Angle": {"points": angles_tmp_idx["elbow_angle"], "mode": "FLY", "good_range": (70, 80), "display_name": "Elbow_Angle"},
-    "Elbow_Angle_Average": {"points": angles_tmp_idx["elbow_angle"], "mode": "AVERAGE", "good_range": (70, 80), "display_name": "Elbow_Angle_Average"},
+    "Elbow_Angle": {"points": angles_tmp_idx["elbow_angle"], "mode": "FLY", "good_range": (None, None), "display_name": "Elbow_Angle"},
+    "Elbow_Angle_Average": {"points": angles_tmp_idx["elbow_angle"], "mode": "AVERAGE", "good_range": (None, None), "display_name": "Elbow_Angle_Average"},
 
     # Foot Float Angle
     # "Foot_Float_Angle_Min_left",
@@ -105,6 +105,5 @@ report_angle_dict = {
     # "Foot_Float_Angle_Min_right",
     # "Foot_Float_Angle_Max_right",
     # "Foot_Float_Angle_Mean_right",
-
 
 }

@@ -69,8 +69,7 @@ class BikeService(object):
     def process_video(self):
         try:
             self._is_canceled = False
-
-            angle_calculator = AngleCalculator()
+            self._is_really_canceled = False
 
             datum = op.Datum()
 
@@ -82,10 +81,18 @@ class BikeService(object):
             assert frame1_tmp.cols == frame2_tmp.cols == frame3_tmp.cols
             assert frame1_tmp.rows == frame2_tmp.rows == frame3_tmp.rows
 
+            angle_calculator = AngleCalculator(width = frame1_tmp.cols, height=frame1_tmp.rows)
+
             while True:
                 t0 = time.time()
-                if self._is_canceled:
+
+                if self._is_really_canceled:
+                    if angle_calculator.knee_path_pic is not None:
+                        cv2.imwrite("final_knee_path.png", angle_calculator.knee_path_pic)
                     break
+
+                if self._is_canceled:
+                    self._is_really_canceled = True
 
                 frames_np_rotate = []
                 # frame1_np front
@@ -127,13 +134,19 @@ class BikeService(object):
                             key_points3 = [(None, None, None) if point[:2] == [0.0, 0.0] else (point[0] - 2 * self.single_width, point[1], point[2]) for point in key_points]
 
                 # calculate angles
-                angle_calculator.update_every_frame(key_points1, key_points3, key_points2)
+                angle_calculator.update_every_frame(key_points1, key_points3, key_points2, is_last_frame = self._is_really_canceled)
 
                 self.socketio.sleep(self.sleep_time)
 
                 t3 = time.time()
 
-                self._emit_image(*frames_np_rotate)
+                r = angle_calculator.knee_path_pic_crop_ratio
+                wid, hei, channel = angle_calculator.frame_shape
+                small_wid = int(wid // r)
+                small_hei = int(hei // r)
+                small_knee_path_pic = angle_calculator.knee_path_pic[0 + (wid - small_wid) // 2: -(wid - small_wid) // 2, 0 + (hei - small_hei) // 2: -(hei - small_hei) // 2,:]
+
+                self._emit_image(*frames_np_rotate, small_knee_path_pic)
 
                 emit('points', {"front": [(mod_with_none(point[0], self.__emit_image_shrink_ratio),
                                            mod_with_none(point[1], self.__emit_image_shrink_ratio),
@@ -150,7 +163,6 @@ class BikeService(object):
                                 "angles": angle_calculator.report_angles,
                                 "distance": angle_calculator.report_distance},
                                 ignore_queue=True)
-
                 t4 = time.time()
 
                 logger.debug('real fps {}, detection {}, emit {}, sleep {}'.format(round(1 / (t4 - t0), 1), t2 - t1, t4- t3, self.sleep_time))
@@ -163,23 +175,24 @@ class BikeService(object):
         logger.info("canceling process.")
         self._is_canceled = True
 
-
-    def _emit_image(self, frame_front, frame_left, frame_right):
+    def _emit_image(self, frame_front, frame_left, frame_right, frame_knee_path):
 
         for _ in range(self.__emit_image_shrink_ratio_times_of_two):
             frame_front = cv2.pyrDown(frame_front)
             frame_left = cv2.pyrDown(frame_left)
             frame_right = cv2.pyrDown(frame_right)
+            # frame_knee_path = cv2.pyrDown(frame_knee_path)
 
         img_bytes_front = cv2.imencode('.jpeg', frame_front)[1].tostring()
         img_bytes_left = cv2.imencode('.jpeg', frame_left)[1].tostring()
         img_bytes_right = cv2.imencode('.jpeg', frame_right)[1].tostring()
+        img_bytes_knee_path = cv2.imencode('.jpeg', frame_knee_path)[1].tostring()
 
         emit('image', {
             'img_right': self._get_base64_encode_str(img_bytes_right),
             'img_left': self._get_base64_encode_str(img_bytes_left),
-            'img_front': self._get_base64_encode_str(img_bytes_front)}, ignore_queue=True)
-
+            'img_front': self._get_base64_encode_str(img_bytes_front),
+            'img_knee_path': self._get_base64_encode_str(img_bytes_knee_path)}, ignore_queue=True)
 
     def _get_base64_encode_str(self, input):
         encode_bytes = base64.b64encode(input)
