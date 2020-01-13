@@ -1,4 +1,4 @@
-from core.util.constant import *
+from core.config.constant import *
 from core.util.util import *
 from core.config.app_config import logger
 import time

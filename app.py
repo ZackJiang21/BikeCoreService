@@ -1,17 +1,22 @@
 import os
 print(os.__file__)
-from flask import Flask
 from flask_socketio import SocketIO
 
 from core.service.bike_process_service import BikeService
 from core.config.app_config import logger
 
+from core import create_app
+from core.model import db
+import core.model as model
+import core.routes as routes
+
 import eventlet
 eventlet.monkey_patch()
 
-app = Flask(__name__)
+app = create_app()
+model.init_app()
+routes.init_app(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
-# socketio = SocketIO(app, cors_allowed_origins="*")
 
 bike_service = BikeService(socketio)
 
@@ -27,4 +32,5 @@ def cancel_process():
 
 
 if __name__ == '__main__':
-    socketio.run(app, host="10.10.1.105", port=5000)
+    db.create_all()
+    socketio.run(app, host="127.0.0.1", port=5000)
