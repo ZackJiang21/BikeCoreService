@@ -4,15 +4,16 @@ from core.config.app_config import logger
 import time
 import cv2
 
+
 class AngleCalculator:
 
     def __init__(self, width, height):
         t1 = time.time()
-        self.angle_mode = ['2d', '3d'][0]
+        self.angle_mode = ['2d', '3d'][1]
 
         self.idx = 1
 
-        self.is_last_frame = False # only last frame we calculate range
+        self.is_last_frame = False  # only last frame we calculate range
 
         self.__initial_report_angles_with_none()
         self.__initial_report_angles_helper()
@@ -25,12 +26,20 @@ class AngleCalculator:
         self.key_points_right = []
 
         # marker if not initialized
-        self.knee_path_pic_color = (81, 62, 45) # BGR
+        self.knee_path_pic_color = (81, 62, 45)  # BGR
         self.knee_path_pic = None
         self.left_knee_path_start_point = None
         self.right_knee_path_start_point = None
-        self.knee_path_pic_crop_ratio = 2 # means final pic should be 1/ratio times of original from center
+        self.knee_path_pic_crop_ratio = 2  # means final pic should be 1/ratio times of original from center
         self.frame_shape = (width, height, 3)
+
+        self.front_ratio = 500 / 389
+        self.right_ratio = 500 / 389
+        self.left_ratio = 500 / 389
+        # self.frame_count = 0
+        # self.thigh_len_front = 0
+        # self.thigh_len_left = 0
+        # self.thigh_len_right = 0
 
         print("*" * 50)
         print("Calculator initial time: {}".format(time.time() - t1))
@@ -41,8 +50,11 @@ class AngleCalculator:
     def __initial_report_distance_with_none(self):
         self.report_distance = {}
 
-        for name in distance_idx.keys():
-            self.report_distance.update({name: None})
+        for name in distance_dict.keys():
+            self.report_distance.update({name: {
+                "left": None,
+                "right": None
+            }})
 
     def __initial_report_angles_with_none(self):
         self.report_angles = report_angle_dict
@@ -60,68 +72,101 @@ class AngleCalculator:
     def __initial_report_angles_helper(self):
         self.report_angles_helper = {}
         for key, item in report_angle_dict.items():
-            if key.split("_")[-1] in ["Max", "Min","Top", "Bottom", "Forward", "Rear"]:
-                self.report_angles_helper.update({key: [None, None]}) #left_value, right_value
+            if key.split("_")[-1] in ["Max", "Min", "Top", "Bottom", "Forward", "Rear"]:
+                self.report_angles_helper.update({key: [None, None]})  # left_value, right_value
 
     def __initial_report_distance_helper(self):
-        self.__report_distance_helper = {}
-        for key, value in distance_idx.items():
-            if len(value) == 3:
-                self.__report_distance_helper['{}_Min'.format(key)] = None
-                self.__report_distance_helper['{}_Max'.format(key)] = None
+        self.__report_distance_helper = {
+            'left': {},
+            'right': {},
+        }
+        for key, value in distance_dict.items():
+            if len(value['points']['left']['index']) == 1:
+                self.__report_distance_helper['left']['{}_Min'.format(key)] = None
+                self.__report_distance_helper['right']['{}_Min'.format(key)] = None
+                self.__report_distance_helper['left']['{}_Max'.format(key)] = None
+                self.__report_distance_helper['right']['{}_Max'.format(key)] = None
+
+    def calculate_distance(self, key, point_obj, mode, perspective):
+        side = point_obj['side']
+        if side not in ['left', 'right', 'front']:
+            logger.error('frame not valid')
+            return None
+        key_points = eval('self.key_points_{}'.format(side))
+
+        index_list = point_obj['index']
+        ratio = eval('self.{}_ratio'.format(side))
+        if len(index_list) == 2:
+            start_point = key_points[index_list[0]][:2]
+            end_point = key_points[index_list[1]][:2]
+            if mode == 'h':
+                distance = minus_with_none(start_point[0], end_point[0])
+            elif mode == 'v':
+                distance = minus_with_none(start_point[1], end_point[1])
+            elif mode == 'd':
+                distance = distance_2d(start_point, end_point)
+                # if side == 'right' and key == 'Thigh_Length':
+                #     logger.error(self.frame_count)
+                #     front_start_point = self.key_points_front[index_list[0]][:2]
+                #     front_end_point = self.key_points_front[index_list[1]][:2]
+                #     distance_front = distance_2d(front_start_point, front_end_point)
+                #     self.thigh_len_front = (self.thigh_len_front * self.frame_count + distance_front) / (self.frame_count + 1)
+                #     logger.error("front: {}".format(self.thigh_len_front))
+                #
+                #     left_start_point = self.key_points_left[index_list[0]][:2]
+                #     left_end_point = self.key_points_left[index_list[1]][:2]
+                #     distance_left = distance_2d(left_start_point, left_end_point)
+                #     self.thigh_len_left = (self.thigh_len_left * self.frame_count + distance_left) / (self.frame_count + 1)
+                #     logger.error("left: {}".format(self.thigh_len_left))
+                #
+                #     right_start_point = self.key_points_right[index_list[0]][:2]
+                #     right_end_point = self.key_points_right[index_list[1]][:2]
+                #     distance_right = distance_2d(right_start_point, right_end_point)
+                #     self.thigh_len_right = (self.thigh_len_right * self.frame_count + distance_right) / (self.frame_count + 1)
+                #     logger.error("right: {}".format(self.thigh_len_right))
+                #     self.frame_count += 1
+                # distance = distance_3d(start_point, end_point, front_start_point, front_end_point)
+            else:
+                logger.error("error, unknown distance mode")
+                distance = None
+            if not distance == None:
+                return round(distance * ratio, 2)
+            else:
+                return None
+        if len(index_list) == 1:
+            point = key_points[index_list[0]][:2]
+            if mode == 'h':
+                value = point[0]
+            elif mode == 'v':
+                value = point[1]
+            else:
+                logger.error("error, unknown distance mode for travel distance")
+                value = None
+
+            self.__report_distance_helper[perspective]["{}_Min".format(key)] = \
+                min_with_none(self.__report_distance_helper[perspective]["{}_Min".format(key)], value)
+            self.__report_distance_helper[perspective]["{}_Max".format(key)] = \
+                max_with_none(self.__report_distance_helper[perspective]["{}_Max".format(key)], value)
+            distance = minus_with_none(self.__report_distance_helper[perspective]["{}_Max".format(key)],
+                                       self.__report_distance_helper[perspective]["{}_Min".format(key)])
+
+            if not distance == None:
+                return round(distance * ratio, 2)
+            else:
+                return None
+        return None
 
     def __update_report_distance(self):
-
-        for key, value in distance_idx.items():
-
-            frame = value[-2]
-            mode = value[-1]
-            if frame not in ['left', 'right', 'front']:
-                logger.error('frame not valid')
-                continue
-            points = eval('self.key_points_{}'.format(frame))
-
+        for key, item in distance_dict.items():
+            mode = item['mode']
             if mode not in ['h', 'v', 'd']:
                 logger.error('mode not valid')
                 continue
-
-            if len(value) == 4:
-                start_point = points[value[0]][:2]
-                end_point = points[value[1]][:2]
-
-                if mode == 'h':
-                    distance = minus_with_none(start_point[0], end_point[0])
-                elif mode == 'v':
-                    distance = minus_with_none(start_point[1], end_point[1])
-                elif mode == 'd':
-                    distance = distance_2d(start_point, end_point)
-                else:
-                    logger.error("error, unknown distance mode")
-                    distance = None
-
-            elif len(value) == 3:
-                point = points[value[0]][:2]
-
-                if mode == 'h':
-                    value = point[0]
-                elif mode == 'v':
-                    value = point[1]
-                else:
-                    logger.error("error, unknown distance mode for travel distance")
-                    value = None
-
-                self.__report_distance_helper["{}_Min".format(key)] = \
-                    min_with_none(self.__report_distance_helper["{}_Min".format(key)], value)
-                self.__report_distance_helper["{}_Max".format(key)] = \
-                    max_with_none(self.__report_distance_helper["{}_Max".format(key)], value)
-                distance = minus_with_none(self.__report_distance_helper["{}_Max".format(key)],
-                                           self.__report_distance_helper["{}_Min".format(key)])
-
-            else:
-                logger.error("error, unknown distance parameter")
-                distance = None
-
-            self.report_distance.update({key: distance})
+            point_obj = item['points']
+            left_distance = self.calculate_distance(key, point_obj['left'], mode, 'left')
+            right_distance = self.calculate_distance(key, point_obj['right'], mode, 'right')
+            self.report_distance[key]['left'] = left_distance
+            self.report_distance[key]['right'] = right_distance
 
     def __update_report_angles(self):
 
@@ -129,7 +174,7 @@ class AngleCalculator:
             idxs_left, idxs_right = item["points"]
             points_left = [self.key_points_left[idx][:2] for idx in idxs_left]
             points_right = [self.key_points_right[idx][:2] for idx in idxs_right]
-            if key == "Back_From_Level" and (None,None) not in points_right:
+            if key == "Back_From_Level" and (None, None) not in points_right:
                 a = 1
 
             if len(points_left) == 2:
@@ -175,8 +220,10 @@ class AngleCalculator:
                 if self.is_last_frame:
                     max_key = "{}_Max".format(basename)
                     min_key = "{}_Min".format(basename)
-                    self.report_angles[key]["left"] = minus_with_none(self.report_angles[max_key]["left"], self.report_angles[min_key]["left"])
-                    self.report_angles[key]["right"] = minus_with_none(self.report_angles[max_key]["right"], self.report_angles[min_key]["right"])
+                    self.report_angles[key]["left"] = minus_with_none(self.report_angles[max_key]["left"],
+                                                                      self.report_angles[min_key]["left"])
+                    self.report_angles[key]["right"] = minus_with_none(self.report_angles[max_key]["right"],
+                                                                       self.report_angles[min_key]["right"])
                 else:
                     self.report_angles[key]["left"] = None
                     self.report_angles[key]["right"] = None
@@ -217,8 +264,10 @@ class AngleCalculator:
                     self.report_angles[key]["right"] = tmp_angle_right
 
             elif mode == "Average":
-                self.report_angles[key]["left"] = calculate_average(self.report_angles[key]["left"], tmp_angle_left, self.idx)
-                self.report_angles[key]["right"] = calculate_average(self.report_angles[key]["right"], tmp_angle_right, self.idx)
+                self.report_angles[key]["left"] = calculate_average(self.report_angles[key]["left"], tmp_angle_left,
+                                                                    self.idx)
+                self.report_angles[key]["right"] = calculate_average(self.report_angles[key]["right"], tmp_angle_right,
+                                                                     self.idx)
 
             else:
                 self.report_angles[key]["left"] = tmp_angle_left
@@ -248,11 +297,13 @@ class AngleCalculator:
                 if side_angle is not None:
                     if side_angle > range[1]:
                         item["{}_exceed_range".format(side)] = True
-                        if item["{}_more_than_range".format(side)] is None or side_angle - range[1] > item["{}_more_than_range".format(side)]:
+                        if item["{}_more_than_range".format(side)] is None or side_angle - range[1] > item[
+                            "{}_more_than_range".format(side)]:
                             item["{}_more_than_range".format(side)] = round(side_angle - range[1], 2)
                     elif side_angle < range[0]:
                         item["{}_exceed_range".format(side)] = True
-                        if item["{}_less_than_range".format(side)] is None or range[0] - side_angle >  abs(item["{}_less_than_range".format(side)]):
+                        if item["{}_less_than_range".format(side)] is None or range[0] - side_angle > abs(
+                                item["{}_less_than_range".format(side)]):
                             item["{}_less_than_range".format(side)] = - round((range[0] - side_angle), 2)
 
     def __update_knee_pic(self, key_points1, frame_shape):
@@ -260,12 +311,12 @@ class AngleCalculator:
         if self.knee_path_pic is None:
             self.knee_path_pic = np.zeros(frame_shape, np.uint8)
             for i in range(3):
-                self.knee_path_pic[:,:,i] = self.knee_path_pic_color[i]
+                self.knee_path_pic[:, :, i] = self.knee_path_pic_color[i]
 
             # plot bike frame
             cv2.line(self.knee_path_pic,
-                     (int(self.frame_shape[1]//2), int(self.frame_shape[0]//8*3)),
-                     (int(self.frame_shape[1]//2), int(self.frame_shape[0]//8*5)),
+                     (int(self.frame_shape[1] // 2), int(self.frame_shape[0] // 8 * 3)),
+                     (int(self.frame_shape[1] // 2), int(self.frame_shape[0] // 8 * 5)),
                      color=(231, 136, 29),
                      thickness=3)
 
@@ -274,10 +325,12 @@ class AngleCalculator:
                 current_knee_point = (int(key_points1[point_idx][0]), int(key_points1[point_idx][1]))
 
                 if eval("self.{}_knee_path_start_point".format(side)) is not None:
-                    color = (0, 0, 255) if current_knee_point[1] > eval("self.{}_knee_path_start_point[1]".format(side)) else (0, 255, 0)
+                    color = (0, 255, 0) if current_knee_point[1] > eval(
+                        "self.{}_knee_path_start_point[1]".format(side)) else (0, 0, 255)
 
-                    # down is red (0, 0 ,255), up is green (0, 255, 0) BGR
-                    cv2.line(self.knee_path_pic, eval("self.{}_knee_path_start_point".format(side)), current_knee_point, color=color, thickness=2)
+                    # up is red (0, 0 ,255), down is green (0, 255, 0) BGR
+                    cv2.line(self.knee_path_pic, eval("self.{}_knee_path_start_point".format(side)), current_knee_point,
+                             color=color, thickness=2)
 
                 exec("self.{}_knee_path_start_point = current_knee_point".format(side))
 
@@ -299,12 +352,7 @@ class AngleCalculator:
         self.__update_knee_pic(key_points_front, self.frame_shape)
 
         self.__update_report_distance()
-        for k, v in self.report_distance.items():
-            if v is None:
-                continue
-            self.report_distance.update({k: round(float(v), 2)})
 
         # print("[{}] update time: {}".format(self.idx, time.time() - t1))
         # print("[{}] update fps: {}, actual fps: {}".format(self.idx, round(1 / (time.time() - t1), 1), round(self.idx/(time.time() - self.zero_time), 1)))
         self.idx += 1
-

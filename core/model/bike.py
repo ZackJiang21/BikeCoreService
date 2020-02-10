@@ -9,7 +9,7 @@ class Bike(db.Model):
     size = db.Column(db.String(16), nullable=False)
     year = db.Column(db.SmallInteger, nullable=False)
     type = db.Column(db.String(16), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey(User.id), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey(User.id, ondelete='CASCADE'), nullable=False)
 
     def as_dict(self):
         return {c.name: getattr(self, c.name) for c in self.__table__.columns}

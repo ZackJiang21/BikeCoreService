@@ -50,6 +50,10 @@ except ImportError as e:
 
 
 class BikeService(object):
+    LEFT_INDEX = (0, 5, 6, 7, 12, 13, 14, 19)
+    RIGHT_INDEX = (0, 2, 3, 4, 9, 10, 11, 22)
+    FRONT_INDEX = (0, 2, 3, 4, 9, 10, 11, 22, 5, 6, 7, 12, 13, 14, 19, 1, 8)
+
     def __init__(self, socketio):
         self._is_canceled = False
         self.socketio = socketio
@@ -116,7 +120,7 @@ class BikeService(object):
 
                 t2 = time.time()
 
-                key_points1, key_points2, key_points3 = [(None, None, None)] * 25, [(None, None, None)] * 25, [(None, None, None)] * 25
+                key_points_front, key_points_left, key_points_right = [(None, None, None)] * 25, [(None, None, None)] * 25, [(None, None, None)] * 25
 
                 if datum.poseKeypoints.shape:
 
@@ -126,15 +130,15 @@ class BikeService(object):
 
                         x_max = max([point[0] for point in key_points])
 
-                        if 0 <= x_max and x_max < self.single_width:
-                            key_points1 = [(None, None, None) if point[:2] == [0.0, 0.0] else tuple(point) for point in key_points]
-                        elif self.single_width <= x_max and x_max < self.single_width * 2:
-                            key_points2 = [(None, None, None) if point[:2] == [0.0, 0.0] else (point[0] - self.single_width, point[1], point[2]) for point in key_points]
-                        else:
-                            key_points3 = [(None, None, None) if point[:2] == [0.0, 0.0] else (point[0] - 2 * self.single_width, point[1], point[2]) for point in key_points]
+                        if 0 <= x_max and x_max < self.single_width and not self._filter_keypoint(self.FRONT_INDEX, key_points):
+                            key_points_front = [(None, None, None) if point[:2] == [0.0, 0.0] else tuple(point) for point in key_points]
+                        elif self.single_width <= x_max and x_max < self.single_width * 2  and not self._filter_keypoint(self.LEFT_INDEX, key_points):
+                            key_points_left = [(None, None, None) if point[:2] == [0.0, 0.0] else (point[0] - self.single_width, point[1], point[2]) for point in key_points]
+                        elif not self._filter_keypoint(self.RIGHT_INDEX, key_points):
+                            key_points_right = [(None, None, None) if point[:2] == [0.0, 0.0] else (point[0] - 2 * self.single_width, point[1], point[2]) for point in key_points]
 
                 # calculate angles
-                angle_calculator.update_every_frame(key_points1, key_points3, key_points2, is_last_frame = self._is_really_canceled)
+                angle_calculator.update_every_frame(key_points_front, key_points_right, key_points_left, is_last_frame = self._is_really_canceled)
 
                 self.socketio.sleep(self.sleep_time)
 
@@ -151,20 +155,19 @@ class BikeService(object):
                 emit('points', {"front": [(mod_with_none(point[0], self.__emit_image_shrink_ratio),
                                            mod_with_none(point[1], self.__emit_image_shrink_ratio),
                                            point[2])
-                                          for point in key_points1],
+                                          for point in key_points_front],
                                 "left": [(mod_with_none(point[0], self.__emit_image_shrink_ratio),
                                            mod_with_none(point[1], self.__emit_image_shrink_ratio),
                                            point[2])
-                                          for point in key_points2],
+                                          for point in key_points_left],
                                 "right": [(mod_with_none(point[0], self.__emit_image_shrink_ratio),
                                            mod_with_none(point[1], self.__emit_image_shrink_ratio),
                                            point[2])
-                                          for point in key_points3],
+                                          for point in key_points_right],
                                 "angles": angle_calculator.report_angles,
                                 "distance": angle_calculator.report_distance},
                                 ignore_queue=True)
                 t4 = time.time()
-
                 logger.debug('real fps {}, detection {}, emit {}, sleep {}'.format(round(1 / (t4 - t0), 1), t2 - t1, t4- t3, self.sleep_time))
 
 
@@ -182,7 +185,9 @@ class BikeService(object):
             frame_left = cv2.pyrDown(frame_left)
             frame_right = cv2.pyrDown(frame_right)
             # frame_knee_path = cv2.pyrDown(frame_knee_path)
-
+        cv2.rectangle(frame_front, (50, 120), (130, 280), (0, 0, 255), 1)
+        cv2.rectangle(frame_right, (5, 140), (175, 240), (0, 0, 255), 1)
+        cv2.rectangle(frame_left, (5, 140), (175, 240), (0, 0, 255), 1)
         img_bytes_front = cv2.imencode('.jpeg', frame_front)[1].tostring()
         img_bytes_left = cv2.imencode('.jpeg', frame_left)[1].tostring()
         img_bytes_right = cv2.imencode('.jpeg', frame_right)[1].tostring()
@@ -197,5 +202,13 @@ class BikeService(object):
     def _get_base64_encode_str(self, input):
         encode_bytes = base64.b64encode(input)
         return str(encode_bytes, 'utf-8')
+
+    def _filter_keypoint(self, indexList, keypoints):
+        score = 0
+        for index in indexList:
+            score += keypoints[index][2]
+        if score / len(indexList) < 0.4:
+            return True
+        return False
 
 

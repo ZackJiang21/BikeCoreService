@@ -19,49 +19,178 @@ angles_tmp_idx = {
     "foot_from_level": [(14, 19), (11, 22)]
 }
 
-distance_idx = {
-    "Knee_to_Foot_Forward_left": (13, 19, "left", "h"),
-    "Knee_to_Foot_Forward_right": (10, 22, "right", "h"),
-
-    "Knee_to_Foot_Lateral_left": (13, 19, "front", "h"),
-    "Knee_to_Foot_Lateral_right": (10, 22, "front", "h"),
-
-    "Hip_to_Foot_Lateral_left": (12, 19, "front", "h"),
-    "Hip_to_Foot_Lateral_right": (9, 22, "front", "h"),
-
-    "Hip_to_Wrist_Vertical_left": (12, 7, "left", "v"),
-    "Hip_to_Wrist_Vertical_right": (9, 4, "right", "v"),
-
-    "Hip_to_Wrist_Forward_left": (12, 7, "left", "h"),
-    "Hip_to_Wrist_Forward_right": (9, 4, "right", "h"),
-
-    "Hip_to_Elbow_Vertical_left": (12, 6, "left", "v"),
-    "Hip_to_Elbow_Vertical_right": (9, 3, "right", "v"),
-
-    "Hip_to_Elbow_Forward_left": (12, 6, "left", "h"),
-    "Hip_to_Elbow_Forward_right": (9, 3, "right", "h"),
-
-    "Shoulder_to_Wrist_Lateral_left": (5, 7, "front", "h"),
-    "Shoulder_to_Wrist_Lateral_right": (2, 4, "front", "h"),
-
-    # travel distance
-    "Knee_Lateral_Travel_left": (13, "front", "h"),
-    "Knee_Lateral_Travel_right": (10, "front", "h"),
-
-    "Hip_Vertical_Travel_left": (12, "left", "v"),
-    "Hip_Vertical_Travel_right": (9, "right", "v"),
-
-    "Hip_Lateral_Travel_left": (12, "front", "v"),
-    "Hip_Lateral_Travel_right": (9, "front", "v"),
-
-    # length
-    "Thigh_Length_left": (12, 13, "left", "d"),
-    "Thigh_Length_right": (9, 10, "right", "d"),
-
-    "Shin_Length_left": (13, 14, "left", "d"),
-    "Shin_Length_right": (10, 11, "right", "d")
+distance_dict = {
+    "Knee_to_Foot_Forward": {
+        "mode": "h",
+        "points": {
+            "left": {
+                "side": "left",
+                "index": (13, 19)
+            },
+            "right": {
+                "side": "right",
+                "index": (10, 22)
+            }
+        },
+        "range": (50, 120)
+    },
+    "Knee_to_Foot_Lateral": {
+        "mode": "h",
+        "points": {
+            "left": {
+                "side": "front",
+                "index": (13, 19)
+            },
+            "right": {
+                "side": "front",
+                "index": (10, 22)
+            }
+        },
+    },
+    "Hip_to_Foot_Lateral": {
+        "mode": "h",
+        "points": {
+            "left": {
+                "side": "front",
+                "index": (12, 19)
+            },
+            "right": {
+                "side": "front",
+                "index": (9, 22)
+            }
+        },
+    },
+    "Hip_to_Wrist_Vertical": {
+        "mode": "v",
+        "points": {
+            "left": {
+                "side": "left",
+                "index": (12, 7)
+            },
+            "right": {
+                "side": "right",
+                "index": (9, 4)
+            }
+        },
+    },
+    "Hip_to_Wrist_Forward": {
+        "mode": "h",
+        "points": {
+            "left": {
+                "side": "left",
+                "index": (12, 7)
+            },
+            "right": {
+                "side": "right",
+                "index": (9, 4)
+            }
+        },
+    },
+    "Hip_to_Elbow_Vertical": {
+        "mode": "v",
+        "points": {
+            "left": {
+                "side": "left",
+                "index": (12, 6)
+            },
+            "right": {
+                "side": "right",
+                "index": (9, 3)
+            }
+        },
+    },
+    "Hip_to_Elbow_Forward":  {
+        "mode": "h",
+        "points": {
+            "left": {
+                "side": "left",
+                "index": (12, 6)
+            },
+            "right": {
+                "side": "right",
+                "index": (9, 3)
+            }
+        },
+    },
+    "Shoulder_to_Wrist_Lateral":  {
+        "mode": "h",
+        "points": {
+            "left": {
+                "side": "front",
+                "index": (5, 7)
+            },
+            "right": {
+                "side": "front",
+                "index": (2, 4)
+            }
+        },
+    },
+    "Knee_Lateral_Travel": {
+        "mode": "h",
+        "points": {
+            "left": {
+                "side": "front",
+                "index": (13,)
+            },
+            "right": {
+                "side": "front",
+                "index": (10,)
+            }
+        },
+    },
+    "Hip_Vertical_Travel": {
+        "mode": "v",
+        "points": {
+            "left": {
+                "side": "left",
+                "index": (12,)
+            },
+            "right": {
+                "side": "right",
+                "index": (9,)
+            }
+        },
+    },
+    "Hip_Lateral_Travel": {
+        "mode": "v",
+        "points": {
+            "left": {
+                "side": "front",
+                "index": (12,)
+            },
+            "right": {
+                "side": "front",
+                "index": (9,)
+            }
+        },
+    },
+    "Thigh_Length": {
+        "mode": "d",
+        "points": {
+            "left": {
+                "side": "left",
+                "index": (12, 13)
+            },
+            "right": {
+                "side": "right",
+                "index": (9, 10)
+            }
+        },
+    },
+    "Shin_Length": {
+        "mode": "d",
+        "points": {
+            "left": {
+                "side": "left",
+                "index": (13, 14)
+            },
+            "right": {
+                "side": "right",
+                "index": (10, 11)
+            }
+        },
+    },
 }
-
 
 report_angle_dict = {
     "Ankle_Angle_Max": {"points": angles_tmp_idx["ankle_angle"], "mode": "MAX", "good_range": (90, 100), "display_name": "Ankle_Angle_Max"},
