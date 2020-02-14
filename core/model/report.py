@@ -10,6 +10,7 @@ class Report(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey(User.id, ondelete='CASCADE'), nullable=False)
     name = db.Column(db.String(32), nullable=False)
     create_time = db.Column(db.TIMESTAMP, default=func.now(), nullable=False)
+    user = db.relationship(User, backref='report')
 
     def as_dict(self):
         report_dict = {c.name: getattr(self, c.name) for c in self.__table__.columns}
