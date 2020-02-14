@@ -14,7 +14,7 @@ import eventlet
 eventlet.monkey_patch()
 
 app = create_app()
-model.init_app()
+model.init_app(app)
 routes.init_app(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
@@ -27,8 +27,11 @@ def start_process(msg):
 
 
 @socketio.on('cancel_process')
-def cancel_process():
-    bike_service.cancel_process_video()
+def cancel_process(rider_info):
+    logger.info(rider_info)
+    bike = rider_info['bike']
+    user = rider_info['user']
+    bike_service.cancel_process_video(user, bike)
 
 
 if __name__ == '__main__':

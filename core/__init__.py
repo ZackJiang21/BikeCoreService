@@ -12,7 +12,5 @@ def create_app():
     # init alchemy
     app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:shihang123@localhost:3306/bike_db?charset=utf8'
     app.config['SQLALCHEMY_TRACK_MODIFICATION'] = True
-    db.app = app
-    db.init_app(app)
 
     return app
