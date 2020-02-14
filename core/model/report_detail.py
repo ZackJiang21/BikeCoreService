@@ -24,3 +24,7 @@ class ReportDetail(db.Model):
     key_point_front = db.Column(Json(), nullable=False)
     key_point_left = db.Column(Json(), nullable=False)
     key_point_right = db.Column(Json(), nullable=False)
+    report = db.relationship(Report, backref='report_detail', uselist=False)
+
+    def as_dict(self):
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
