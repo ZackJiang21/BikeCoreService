@@ -1,23 +1,25 @@
+import base64
 import os
 import platform
 import sys
-import base64
 import time
+import uuid
 
 import cv2
 import numpy as np
 from flask_socketio import emit
 
 from core.config.app_config import logger
-from core.model import db
-from core.model.report import Report
-from core.model.report_detail import ReportDetail
 from core.lib import HKIPcamera1
 from core.lib import HKIPcamera2
 from core.lib import HKIPcamera3
-
+from core.model import db
+from core.model.report import Report
+from core.model.report_detail import ReportDetail
 from core.util.angle_calculator import AngleCalculator
+from core.util.report_img_util import get_img_path
 from core.util.util import mod_with_none
+
 # Import Openpose (Windows/Ubuntu/OSX)
 dir_path = os.path.dirname(os.path.realpath(__file__))
 try:
@@ -30,9 +32,8 @@ try:
         import pyopenpose as op
     else:
 
-
         # Change these variables to point to the correct folder (Release/x64 etc.)
-        sys.path.append('/home/zhangjiang/code/openpose/openpose/build/python'); #
+        sys.path.append('/home/zhangjiang/code/openpose/openpose/build/python');  #
         # If you run `make install` (default path is `/usr/local/python` for Ubuntu), you can also access the OpenPose/python module from there. This will install OpenPose and the python library at your desired installation path. Ensure that this is in your python path in order to use it.
         # sys.path.append('/usr/local/python')
         from openpose import pyopenpose as op
@@ -62,13 +63,13 @@ class BikeService(object):
         self.socketio = socketio
         name = str('admin')  # 管理员用户名
         pw = str('shihang123')  # 管理员密码
-        HKIPcamera1.init('10.90.90.91', name, pw) #front
-        HKIPcamera2.init('10.90.90.92', name, pw) #left
-        HKIPcamera3.init('10.90.90.93', name, pw) #right
+        HKIPcamera1.init('10.90.90.91', name, pw)  # front
+        HKIPcamera2.init('10.90.90.92', name, pw)  # left
+        HKIPcamera3.init('10.90.90.93', name, pw)  # right
 
         self.__rotate_input_before_pose_estimation = True
-        self.__emit_image_shrink_ratio_times_of_two = 2 # should be times of 2
-        self.__emit_image_shrink_ratio = 2 ** self.__emit_image_shrink_ratio_times_of_two # should be times of 2
+        self.__emit_image_shrink_ratio_times_of_two = 2  # should be times of 2
+        self.__emit_image_shrink_ratio = 2 ** self.__emit_image_shrink_ratio_times_of_two  # should be times of 2
 
         self.sleep_time = 0.001
         # after emit, must sleep
@@ -88,7 +89,7 @@ class BikeService(object):
             assert frame1_tmp.cols == frame2_tmp.cols == frame3_tmp.cols
             assert frame1_tmp.rows == frame2_tmp.rows == frame3_tmp.rows
 
-            angle_calculator = AngleCalculator(width = frame1_tmp.cols, height=frame1_tmp.rows)
+            angle_calculator = AngleCalculator(width=frame1_tmp.cols, height=frame1_tmp.rows)
 
             while True:
                 if self._is_really_canceled:
@@ -103,7 +104,8 @@ class BikeService(object):
                 frames_np_rotate, key_points_front, key_points_left, key_points_right = self.get_key_point(datum)
 
                 # calculate angles
-                angle_calculator.update_every_frame(key_points_front, key_points_right, key_points_left, is_last_frame = self._is_really_canceled)
+                angle_calculator.update_every_frame(key_points_front, key_points_right, key_points_left,
+                                                    is_last_frame=self._is_really_canceled)
 
                 self.socketio.sleep(self.sleep_time)
 
@@ -111,7 +113,9 @@ class BikeService(object):
                 wid, hei, channel = angle_calculator.frame_shape
                 small_wid = int(wid // r)
                 small_hei = int(hei // r)
-                small_knee_path_pic = angle_calculator.knee_path_pic[0 + (wid - small_wid) // 2: -(wid - small_wid) // 2, 0 + (hei - small_hei) // 2: -(hei - small_hei) // 2,:]
+                small_knee_path_pic = angle_calculator.knee_path_pic[
+                                      0 + (wid - small_wid) // 2: -(wid - small_wid) // 2,
+                                      0 + (hei - small_hei) // 2: -(hei - small_hei) // 2, :]
 
                 self._emit_image(*frames_np_rotate, small_knee_path_pic)
 
@@ -120,16 +124,16 @@ class BikeService(object):
                                            point[2])
                                           for point in key_points_front],
                                 "left": [(mod_with_none(point[0], self.__emit_image_shrink_ratio),
-                                           mod_with_none(point[1], self.__emit_image_shrink_ratio),
-                                           point[2])
-                                          for point in key_points_left],
+                                          mod_with_none(point[1], self.__emit_image_shrink_ratio),
+                                          point[2])
+                                         for point in key_points_left],
                                 "right": [(mod_with_none(point[0], self.__emit_image_shrink_ratio),
                                            mod_with_none(point[1], self.__emit_image_shrink_ratio),
                                            point[2])
                                           for point in key_points_right],
                                 "angles": angle_calculator.report_angles,
                                 "distance": angle_calculator.report_distance},
-                                ignore_queue=True)
+                     ignore_queue=True)
 
 
         except Exception as e:
@@ -166,10 +170,10 @@ class BikeService(object):
                 elif self.single_width <= x_max and x_max < self.single_width * 2 and not self._filter_keypoint(
                         self.LEFT_INDEX, key_points):
                     key_points_left = [(None, None, None) if point[:2] == [0.0, 0.0] else (
-                    point[0] - self.single_width, point[1], point[2]) for point in key_points]
+                        point[0] - self.single_width, point[1], point[2]) for point in key_points]
                 elif not self._filter_keypoint(self.RIGHT_INDEX, key_points):
                     key_points_right = [(None, None, None) if point[:2] == [0.0, 0.0] else (
-                    point[0] - 2 * self.single_width, point[1], point[2]) for point in key_points]
+                        point[0] - 2 * self.single_width, point[1], point[2]) for point in key_points]
         return frames_np_rotate, key_points_front, key_points_left, key_points_right
 
     def cancel_process_video(self):
@@ -177,22 +181,29 @@ class BikeService(object):
         self._is_canceled = True
 
     def __save_report(self, user, bike, angle_calculator):
-        file_name = user['name'] + ' ' + str(int(round(time.time() * 1000)))
-        report = Report(user_id=user['id'],
-                        name=file_name)
-        db.session.add(report)
-        db.session.flush()
-        report_detail = ReportDetail(report_id=report.id,
-                                     model=bike['model'],
-                                     size=bike['size'],
-                                     year=bike['year'],
-                                     type=bike['type'],
-                                     angles=angle_calculator.report_angles,
-                                     distances=angle_calculator.report_distance,
-                                     frame_shape=angle_calculator.frame_shape
-                                     )
-        db.session.add(report_detail)
-        db.session.commit()
+        try:
+            file_name = user['name'] + ' ' + str(int(round(time.time() * 1000)))
+            knee_path_img = str(uuid.uuid1())
+            knee_path_dir = get_img_path(knee_path_img)
+            report = Report(user_id=user['id'],
+                            name=file_name)
+            db.session.add(report)
+            db.session.flush()
+            cv2.imwrite(knee_path_dir, angle_calculator.knee_path_pic)
+            report_detail = ReportDetail(report_id=report.id,
+                                         model=bike['model'],
+                                         size=bike['size'],
+                                         year=bike['year'],
+                                         type=bike['type'],
+                                         angles=angle_calculator.report_angles,
+                                         distances=angle_calculator.report_distance,
+                                         knee_path_img=knee_path_img
+                                         )
+            db.session.add(report_detail)
+            db.session.commit()
+        except Exception as er:
+            logger.error('report roll back %s' % er)
+            db.session.rollback()
 
     def _emit_image(self, frame_front, frame_left, frame_right, frame_knee_path):
 
@@ -226,5 +237,3 @@ class BikeService(object):
         if score / len(indexList) < 0.4:
             return True
         return False
-
-

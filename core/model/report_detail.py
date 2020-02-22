@@ -23,7 +23,7 @@ class ReportDetail(db.Model):
     type = db.Column(db.String(16), nullable=False)
     angles = db.Column(Json(), nullable=False)
     distances = db.Column(Json(), nullable=False)
-    frame_shape = db.Column(Json(), nullable=False)
+    knee_path_img = db.Column(db.String(64), nullable=False)
     report = db.relationship(Report, backref='report_detail', uselist=False)
 
     def as_dict(self):

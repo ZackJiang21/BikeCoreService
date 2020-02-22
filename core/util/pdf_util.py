@@ -5,6 +5,8 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
+from core.util.report_img_util import get_img_path
+
 
 class PdfUtil(object):
     HEIGHT, WIDTH = A4
@@ -198,6 +200,41 @@ class PdfUtil(object):
 
         cur_height = 20
         self.__draw_cell_title(self.SIDE_MARGIN, self.__get_height(cur_height), self.FULL_CONTENT_LENGTH, 'MARKER PATH')
+        note1 = "Note: Maker paths viewed from the front will be on the opposite side of the report. The paths representing the right side of the body will be shown"
+        note2 = "on the left and vice versa. Green is downstroke and red is upstroke."
+        cur_height += 6
+
+        self.__set_fill_color(0, 0, 0)
+        self.canvas.setFont('Helvetica', 12)
+        self.canvas.drawString(self.SIDE_MARGIN + 2 * mm, self.__get_height(cur_height), note1)
+        cur_height += 6
+        self.canvas.drawString(self.SIDE_MARGIN + 2 * mm, self.__get_height(cur_height), note2)
+
+        cur_height += 10
+        self.canvas.drawString(self.SIDE_MARGIN, self.__get_height(cur_height), 'Front View of Knee Path')
+
+        self.__set_stroke_color(200, 200, 200)
+        self.canvas.setLineWidth(1)
+        cur_height += 2
+        self.canvas.line(self.SIDE_MARGIN, self.__get_height(cur_height),
+                         self.SIDE_MARGIN + self.FULL_CONTENT_LENGTH, self.__get_height(cur_height))
+        icon_img = "static/img/marker_path.png"
+        knee_path_img = get_img_path(self.report_detail.knee_path_img)
+        knee_path_size = (36 * mm, 64 * mm)
+
+        icon_height = cur_height + (self.ICON_SIZE[1] / mm + 2)
+        self.canvas.drawImage(icon_img, self.MEASUREMENT['left']['margin'], self.__get_height(icon_height),
+                              self.ICON_SIZE[0],
+                              self.ICON_SIZE[1])
+        cur_height += knee_path_size[1] / mm + 2
+        self.canvas.drawImage(knee_path_img, (self.WIDTH - knee_path_size[0]) / 2, self.__get_height(cur_height),
+                              *knee_path_size)
+
+        cur_height += 2
+        self.__set_stroke_color(200, 200, 200)
+        self.canvas.line(self.SIDE_MARGIN, self.__get_height(cur_height),
+                         self.SIDE_MARGIN + self.FULL_CONTENT_LENGTH, self.__get_height(cur_height))
+
         self.canvas.showPage()
 
     def __draw_title(self, text):
