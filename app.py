@@ -21,17 +21,17 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 bike_service = BikeService(socketio)
 
 @socketio.on('start_process')
-def start_process(msg):
-    logger.info(msg)
-    bike_service.process_video()
-
-
-@socketio.on('cancel_process')
-def cancel_process(rider_info):
+def start_process(rider_info):
     logger.info(rider_info)
     bike = rider_info['bike']
     user = rider_info['user']
-    bike_service.cancel_process_video(user, bike)
+    bike_service.process_video(user, bike)
+
+
+@socketio.on('cancel_process')
+def cancel_process():
+    logger.info('cancel process')
+    bike_service.cancel_process_video()
 
 
 if __name__ == '__main__':

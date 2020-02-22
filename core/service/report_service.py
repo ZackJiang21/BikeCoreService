@@ -1,13 +1,10 @@
-import os
 import smtplib
 import ssl
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
-
 from core.config.app_config import email
+from core.util.pdf_util import PdfUtil
 
 
 class ReportService(object):
@@ -15,12 +12,8 @@ class ReportService(object):
         pass
 
     def get_report_file(self, report_detail):
-        file_path = self._get_report_file_name(report_detail)
-        c = canvas.Canvas(file_path, pagesize=A4)
-        c.drawString(100, 100, "Hello World")
-        c.showPage()
-        c.save()
-        return file_path
+        pdf_util = PdfUtil(report_detail)
+        return pdf_util.generate_report()
 
     def send_to_email(self, report_detail):
         report_path = self.get_report_file(report_detail)
@@ -39,9 +32,3 @@ class ReportService(object):
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
             server.login(email['addr'], email['password'])
             server.sendmail(email['addr'], user.email, msg.as_string())  # 发送邮件
-
-    def _get_report_file_name(self, report_detail):
-        report = report_detail.report
-        report_name = "%s.pdf" % report.name
-        file_path = os.path.join("static/pdf/", report_name)
-        return os.path.abspath(file_path)

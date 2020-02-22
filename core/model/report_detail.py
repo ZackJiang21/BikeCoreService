@@ -21,9 +21,9 @@ class ReportDetail(db.Model):
     size = db.Column(db.String(16), nullable=False)
     year = db.Column(db.SmallInteger, nullable=False)
     type = db.Column(db.String(16), nullable=False)
-    key_point_front = db.Column(Json(), nullable=False)
-    key_point_left = db.Column(Json(), nullable=False)
-    key_point_right = db.Column(Json(), nullable=False)
+    angles = db.Column(Json(), nullable=False)
+    distances = db.Column(Json(), nullable=False)
+    frame_shape = db.Column(Json(), nullable=False)
     report = db.relationship(Report, backref='report_detail', uselist=False)
 
     def as_dict(self):

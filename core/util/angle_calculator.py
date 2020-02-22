@@ -1,8 +1,10 @@
+import time
+
+import cv2
+
+from core.config.app_config import logger
 from core.config.constant import *
 from core.util.util import *
-from core.config.app_config import logger
-import time
-import cv2
 
 
 class AngleCalculator:
@@ -48,13 +50,17 @@ class AngleCalculator:
         self.zero_time = t1
 
     def __initial_report_distance_with_none(self):
-        self.report_distance = {}
+        self.report_distance = distance_dict
 
-        for name in distance_dict.keys():
-            self.report_distance.update({name: {
-                "left": None,
-                "right": None
-            }})
+        for key, value in distance_dict.items():
+            self.report_distance[key].update({"left": None,
+                                              "right": None,
+                                              "left_more_than_range": None,
+                                              "left_less_than_range": None,
+                                              "right_more_than_range": None,
+                                              "right_less_than_range": None,
+                                              "left_exceed_range": False,
+                                              "right_exceed_range": False})
 
     def __initial_report_angles_with_none(self):
         self.report_angles = report_angle_dict

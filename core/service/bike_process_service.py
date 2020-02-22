@@ -73,7 +73,7 @@ class BikeService(object):
         self.sleep_time = 0.001
         # after emit, must sleep
 
-    def process_video(self):
+    def process_video(self, user, bike):
         try:
             self._is_canceled = False
             self._is_really_canceled = False
@@ -91,11 +91,10 @@ class BikeService(object):
             angle_calculator = AngleCalculator(width = frame1_tmp.cols, height=frame1_tmp.rows)
 
             while True:
-                t0 = time.time()
-
                 if self._is_really_canceled:
                     if angle_calculator.knee_path_pic is not None:
                         cv2.imwrite("final_knee_path.png", angle_calculator.knee_path_pic)
+                    self.__save_report(user, bike, angle_calculator)
                     break
 
                 if self._is_canceled:
@@ -173,20 +172,11 @@ class BikeService(object):
                     point[0] - 2 * self.single_width, point[1], point[2]) for point in key_points]
         return frames_np_rotate, key_points_front, key_points_left, key_points_right
 
-    def cancel_process_video(self, user, bike):
+    def cancel_process_video(self):
         logger.info("canceling process.")
         self._is_canceled = True
-        datum = op.Datum()
 
-        frame1_tmp = HKIPcamera1.getframe()
-        frame2_tmp = HKIPcamera2.getframe()
-        frame3_tmp = HKIPcamera3.getframe()
-
-        # we need images of same size to concatnate, if not, will give error
-        assert frame1_tmp.cols == frame2_tmp.cols == frame3_tmp.cols
-        assert frame1_tmp.rows == frame2_tmp.rows == frame3_tmp.rows
-        frames_np_rotate, key_points_front, key_points_left, key_points_right = self.get_key_point(datum)
-
+    def __save_report(self, user, bike, angle_calculator):
         file_name = user['name'] + ' ' + str(int(round(time.time() * 1000)))
         report = Report(user_id=user['id'],
                         name=file_name)
@@ -197,9 +187,10 @@ class BikeService(object):
                                      size=bike['size'],
                                      year=bike['year'],
                                      type=bike['type'],
-                                     key_point_front=key_points_front,
-                                     key_point_left=key_points_left,
-                                     key_point_right=key_points_right)
+                                     angles=angle_calculator.report_angles,
+                                     distances=angle_calculator.report_distance,
+                                     frame_shape=angle_calculator.frame_shape
+                                     )
         db.session.add(report_detail)
         db.session.commit()
 
